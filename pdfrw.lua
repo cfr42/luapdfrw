@@ -2,6 +2,8 @@
 
 --luacheck: read_globals pdfe (loaded by texlua)
 
+VERSION = '1.0.0'
+
 --\section{Utilities}
 
 local function index_error() error("Invalid index", 2) end
