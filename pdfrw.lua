@@ -34,6 +34,8 @@ local pdfw = {}
 local pdfw_doc = {}
 local mt_pdfw_doc = { __index = pdfw_doc }
 
+local format = string.format
+
 --Assigning nil to a table removes the entry, so we need an explicit null type
 --to put a null value into a dict or array, don't we?
 
@@ -57,7 +59,7 @@ do --hex string
       __index = index_error, __newindex = index_error,
       __call = identity,
       __tostring = function(obj)
-			 return '<' .. tostring(obj.value) .. '>'
+			 return format('<%s>', tostring(obj.value))
 		end,
    }
    function pdfw.hex_string(value)
@@ -137,9 +139,9 @@ do --array & dictionary
 		 __tostring = function(obj)
 			  s = '[\n'
 			  for _, child in pairs(obj) do
-					s = s .. indent(tostring(child)) .. "\n"
+					s = format("%s%s\n", s, indent(tostring(child)))
 			  end
-			  return s .. ']'
+			  return format("%s]", s)
 		 end,
 	 }
       )
@@ -166,13 +168,13 @@ do --array & dictionary
 	       return mt_pairs(tbl,pdfe_doc,indirect_root,pairs) end,
 	    __call = identity,
 		 __tostring = function(obj)
-                          s = tostring(obj.Type) .. ' <<\n'
+                          s = format('%s <<\n', tostring(obj.Type))
 			  for key, child in pairs(obj) do
 					if key ~= 'Type' then
-						 s = s .. indent("/" .. tostring(key) .. " = " .. tostring(child)) .. "\n"
+						 s = format("%s%s\n", s, indent(format("/%s = %s", tostring(key), tostring(child))))
 					end
 			  end
-			  return s .. '>>'
+			  return format('%s>>', s)
 		 end
 	 }
       )
@@ -251,7 +253,7 @@ do --reference
 		 __index = ref_index_error, __newindex = ref_index_error,
 		 __call = function(obj) return mt_call(
 					obj, pdfe_doc, pdfe_reference, referenced_pdfe_obj_id) end,
-		 __tostring = function() return 'R ' .. tostring(referenced_pdfe_obj_id) end,
+		 __tostring = function() return format('R %s', tostring(referenced_pdfe_obj_id)) end,
 	 })
       end
 
@@ -280,7 +282,7 @@ do --indirect
       __index = index_error, __newindex = index_error,
       __call = identity,
 		__tostring = function(obj)
-			 return 'INDIRECT ' .. tostring(getmetatable(obj))
+			 return format('INDIRECT %s', tostring(getmetatable(obj)))
 		end,
    }
    function pdfw.indirect(value)
@@ -302,10 +304,10 @@ do --pdfw.from_pdfe_triplet
       val, --boolean
       val, --integer
       val, --float
-      function(_pdfe_doc, _indirect_root, value) return '/' .. value:gsub('/', '#2F') end,
+      function(_pdfe_doc, _indirect_root, value) return format('/%s', value:gsub('/', '#2F')) end,
       function(_pdfe_doc, _indirect_root, value, hex)
 	 if hex then return pdfw.hex_string(value)
-	 elseif value:sub(1,1) == '/' then return '\\057' .. value:sub(2)
+	 elseif value:sub(1,1) == '/' then return format('\\057%s', value:sub(2))
 	 else return value end
       end,
       pdfw.from_pdfe_array, ['pdfe.array'] = pdfw.from_pdfe_array,
@@ -454,7 +456,7 @@ do --linearize
 	 local child_reprs = { [0] = '<<' }
 	 local i = 1
 	 for key, child_obj in pairs(obj) do
-	    child_reprs[i] = '/' .. key .. ' ' .. pdfw.linearize(doc, child_obj)
+	    child_reprs[i] = format('/%s %s', key, pdfw.linearize(doc, child_obj))
 	    i = i + 1
 	 end
 	 child_reprs[i] = '>>'
