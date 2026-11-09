@@ -13,9 +13,6 @@ local function copy_table(t)
    for k,v in pairs(t) do c[k]=v end
    return c
 end
-local function indent(s)
-	 return "  " .. s:gsub("\n", "\n  ")
-end
 
 local function Assert(test, errmsg, level)
     if test then
@@ -33,8 +30,6 @@ end
 local pdfw = {}
 local pdfw_doc = {}
 local mt_pdfw_doc = { __index = pdfw_doc }
-
-local format = string.format
 
 --Assigning nil to a table removes the entry, so we need an explicit null type
 --to put a null value into a dict or array, don't we?
@@ -59,7 +54,7 @@ do --hex string
       __index = index_error, __newindex = index_error,
       __call = identity,
       __tostring = function(obj)
-			 return format('<%s>', tostring(obj.value))
+			 return '<' .. tostring(obj.value) .. '>'
 		end,
    }
    function pdfw.hex_string(value)
@@ -77,6 +72,8 @@ do --array & dictionary
    local function is_pdfe_triplet(obj)
       return getmetatable(obj) == metatable_pdfe_triplet
    end
+
+   local insert, concat = table.insert, table.concat
 
    --The situations for array and dictionary are very similar, so we define
    --parametrized metamethods.
@@ -137,11 +134,14 @@ do --array & dictionary
 	    __len = function() return #tbl end,
 	    __call = identity,
 		 __tostring = function(obj)
-			  s = '[\n'
+        local s = {'[\n'}
 			  for _, child in pairs(obj) do
-					s = format("%s%s\n", s, indent(tostring(child)))
+          insert(s, "  ")
+          insert(s, (tostring(child):gsub("\n", "\n  ")))
+          insert(s, "\n")
 			  end
-			  return format("%s]", s)
+        insert(s, ']')
+			  return concat(s, "")
 		 end,
 	 }
       )
@@ -168,13 +168,20 @@ do --array & dictionary
 	       return mt_pairs(tbl,pdfe_doc,indirect_root,pairs) end,
 	    __call = identity,
 		 __tostring = function(obj)
-                          s = format('%s <<\n', tostring(obj.Type))
+        -- In the original version, s was not local, but I think it should be?
+        local s = {tostring(obj.Type), ' <<\n'}
+        local insert = table.insert
 			  for key, child in pairs(obj) do
 					if key ~= 'Type' then
-						 s = format("%s%s\n", s, indent(format("/%s = %s", tostring(key), tostring(child))))
+             insert(s, "  /")
+             insert(s, (tostring(key):gsub("\n", "\n  ")))
+             insert(s, " = ")
+             insert(s, (tostring(child):gsub("\n", "\n  ")))
+             insert(s, "\n")
 					end
 			  end
-			  return format('%s>>', s)
+        insert(s, ">>")
+			  return concat(s, "")
 		 end
 	 }
       )
@@ -253,7 +260,7 @@ do --reference
 		 __index = ref_index_error, __newindex = ref_index_error,
 		 __call = function(obj) return mt_call(
 					obj, pdfe_doc, pdfe_reference, referenced_pdfe_obj_id) end,
-		 __tostring = function() return format('R %s', tostring(referenced_pdfe_obj_id)) end,
+		 __tostring = function() return 'R ' .. tostring(referenced_pdfe_obj_id) end,
 	 })
       end
 
@@ -282,7 +289,7 @@ do --indirect
       __index = index_error, __newindex = index_error,
       __call = identity,
 		__tostring = function(obj)
-			 return format('INDIRECT %s', tostring(getmetatable(obj)))
+			 return 'INDIRECT ' .. tostring(getmetatable(obj))
 		end,
    }
    function pdfw.indirect(value)
@@ -304,10 +311,10 @@ do --pdfw.from_pdfe_triplet
       val, --boolean
       val, --integer
       val, --float
-      function(_pdfe_doc, _indirect_root, value) return format('/%s', value:gsub('/', '#2F')) end,
+      function(_pdfe_doc, _indirect_root, value) return '/' .. value:gsub('/', '#2F') end,
       function(_pdfe_doc, _indirect_root, value, hex)
 	 if hex then return pdfw.hex_string(value)
-	 elseif value:sub(1,1) == '/' then return format('\\057%s', value:sub(2))
+	 elseif value:sub(1,1) == '/' then return '\\057' .. value:sub(2)
 	 else return value end
       end,
       pdfw.from_pdfe_array, ['pdfe.array'] = pdfw.from_pdfe_array,
@@ -456,7 +463,7 @@ do --linearize
 	 local child_reprs = { [0] = '<<' }
 	 local i = 1
 	 for key, child_obj in pairs(obj) do
-	    child_reprs[i] = format('/%s %s', key, pdfw.linearize(doc, child_obj))
+	    child_reprs[i] = table.concat({'/', key, ' ', pdfw.linearize(doc, child_obj)}, "")
 	    i = i + 1
 	 end
 	 child_reprs[i] = '>>'
@@ -582,7 +589,7 @@ function pdfw_doc.save(doc, filename)
    doc.xref = {}
    doc.fh = Assert(io.open(filename, 'wb'), ('Cannot save %s'):format(filename))
 
-   doc.fh:write(string.format("%%PDF-%d.%d\n", doc.major, doc.minor))
+   doc.fh:write(table.concat({"%PDF-", doc.major, ".", doc.minor, "\n"}, ""))
 
    local magic_bin = 'LuaPDFrw'
    magic_bin = {magic_bin:byte(1,-1)}
